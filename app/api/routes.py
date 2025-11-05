@@ -5,6 +5,7 @@ API路由定义
 """
 
 from typing import Dict, Any
+import time
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -101,7 +102,6 @@ async def execute_function(
             function_id=request.function_id,
             input_data=request.input,
             model_name=request.model_name,
-            use_cache=request.use_cache
         )
 
         return ExecuteResponse(**result)
@@ -117,21 +117,8 @@ async def execute_function(
 @api_router.post(
     "/stream",
     summary="流式执行功能",
-    description="流式执行AI功能，实时返回生成过程",
-    responses={
-        200: {
-            "description": "Server-Sent Events流",
-            "content": {
-                "text/event-stream": {
-                    "example": """data: {"type": "start", "function_id": "translation_zh_to_en", "timestamp": 1234567890}
-
-data: {"type": "token", "content": "Hello", "timestamp": 1234567891}
-
-data: {"type": "end", "usage": {"total_tokens": 10}, "execution_time": 2.5, "timestamp": 1234567893}"""
-                }
-            }
-        }
-    }
+    description="流式执行指定的AI功能，通过Server-Sent Events实时返回生成结果",
+    response_class=StreamingResponse
 )
 async def stream_execute_function(
     request: StreamRequest,
@@ -139,124 +126,98 @@ async def stream_execute_function(
 ) -> StreamingResponse:
     """流式执行功能端点"""
     try:
-        # 生成流ID
+        # 创建唯一的流ID
         stream_id = streaming_manager.create_stream_id()
 
         # 注册流
         streaming_manager.register_stream(
             stream_id=stream_id,
-            function_id=request.function_id
+            function_id=request.function_id,
+            client_info={
+                "function_id": request.function_id,
+                "stream_mode": request.stream_mode,
+                "use_cache": request.use_cache,
+                "user_agent": "client"  # 实际应用中可以从请求头获取
+            }
         )
 
         # 创建数据生成器
-        data_generator = function_manager.stream_execute_function(
-            function_id=request.function_id,
-            input_data=request.input,
-            use_cache=request.use_cache
-        )
+        def generate_stream_data():
+            try:
+                # 使用功能管理器的流式执行方法
+                for chunk in function_manager.stream_execute_function(
+                    function_id=request.function_id,
+                    input_data=request.input,
+                    use_cache=request.use_cache
+                ):
+                    # 根据流模式过滤或转换数据
+                    if request.stream_mode == "tokens":
+                        # 逐token模式：直接传递token数据
+                        if chunk["type"] in ["start", "token", "end", "error"]:
+                            yield chunk
+                    elif request.stream_mode == "chunks":
+                        # 块模式：累积token到一定程度再发送
+                        if chunk["type"] in ["start", "end", "error"]:
+                            yield chunk
+                        # chunk模式的token累积逻辑可以在客户端实现
+                    elif request.stream_mode == "sentences":
+                        # 句子模式：需要等待完整句子
+                        if chunk["type"] in ["start", "end", "error"]:
+                            yield chunk
+                        # 句子模式的累积逻辑可以在客户端实现
+                    else:
+                        # 默认：传递所有数据
+                        yield chunk
 
-        # 返回SSE响应
+            except Exception as e:
+                # 生成错误数据
+                yield {
+                    "type": "error",
+                    "stream_id": stream_id,
+                    "message": f"流式执行失败: {str(e)}",
+                    "timestamp": int(time.time())
+                }
+
+        # 使用流式管理器创建SSE响应
         return streaming_manager.create_sse_response(
             stream_id=stream_id,
-            data_generator=data_generator
+            data_generator=generate_stream_data()
         )
 
     except FunctionNotFoundError as e:
+        # 返回错误流
+        error_generator = streaming_manager.create_error_stream(str(e))
         return StreamingResponse(
-            streaming_manager.create_error_stream(str(e)),
-            media_type="text/event-stream"
+            error_generator,
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "Access-Control-Allow-Origin": "*",
+            }
         )
     except ValidationError as e:
+        # 返回验证错误流
+        error_generator = streaming_manager.create_error_stream(str(e))
         return StreamingResponse(
-            streaming_manager.create_error_stream(str(e)),
-            media_type="text/event-stream"
-        )
-    except Exception as e:
-        return StreamingResponse(
-            streaming_manager.create_error_stream(f"流式执行失败: {str(e)}"),
-            media_type="text/event-stream"
-        )
-
-
-@api_router.get(
-    "/stats",
-    summary="获取统计信息",
-    description="获取应用使用统计和性能数据"
-)
-async def get_stats(
-    function_manager: FunctionManager = Depends(get_function_manager)
-) -> Dict[str, Any]:
-    """获取统计信息端点"""
-    try:
-        # 获取缓存统计
-        from app.utils.cache import cache
-        cache_stats = cache.get_stats()
-
-        # 获取流式响应统计
-        stream_stats = {
-            "active_streams": streaming_manager.get_active_streams_count(),
-            "max_concurrent_streams": streaming_manager.max_concurrent_streams
-        }
-
-        # TODO: 获取对话统计
-        conversation_stats = {
-            "total_conversations": 0,
-            "avg_response_time": 0.0
-        }
-
-        return {
-            "cache": cache_stats,
-            "streaming": stream_stats,
-            "conversations": conversation_stats,
-            "functions": {
-                "total_count": len(function_manager.list_functions()),
-                "active_count": len(function_manager.list_functions())
+            error_generator,
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "Access-Control-Allow-Origin": "*",
             }
-        }
-
+        )
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"获取统计信息失败: {str(e)}"
+        # 返回通用错误流
+        error_generator = streaming_manager.create_error_stream(f"服务器内部错误: {str(e)}")
+        return StreamingResponse(
+            error_generator,
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "Access-Control-Allow-Origin": "*",
+            }
         )
 
-
-@api_router.delete(
-    "/cache",
-    summary="清空缓存",
-    description="清空所有缓存数据"
-)
-async def clear_cache() -> Dict[str, str]:
-    """清空缓存端点"""
-    try:
-        from app.utils.cache import cache
-        cache.clear()
-        return {"message": "缓存已清空"}
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"清空缓存失败: {str(e)}"
-        )
-
-
-@api_router.delete(
-    "/cache/{function_id}",
-    summary="清空指定功能的缓存",
-    description="清空指定功能的所有缓存数据"
-)
-async def clear_function_cache(function_id: str) -> Dict[str, Any]:
-    """清空指定功能缓存端点"""
-    try:
-        from app.utils.cache import cache
-        cleared_count = cache.clear_by_function(function_id)
-        return {
-            "message": f"功能 '{function_id}' 的缓存已清空",
-            "cleared_count": cleared_count
-        }
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"清空功能缓存失败: {str(e)}"
-        )

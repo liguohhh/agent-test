@@ -5,6 +5,5 @@
 """
 
 from .streaming import StreamingResponseManager
-from .cache import SimpleCache
 
-__all__ = ["StreamingResponseManager", "SimpleCache"]
+__all__ = ["StreamingResponseManager"]

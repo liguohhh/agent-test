@@ -20,27 +20,27 @@ class FunctionConfig:
 
     def __init__(
         self,
-        function_id: str,
-        name: str,
-        description: str,
-        system_prompt: str,
-        input_schema: Dict[str, Any],
-        model_params: Optional[Dict[str, Any]] = None,
-        max_input_length: Optional[int] = None,
-        estimated_time: Optional[float] = None,
-        supports_stream: bool = True,
-        is_active: bool = True
+        function_id: str,              # 功能唯一标识符，用于系统内部识别功能
+        name: str,                     # 功能名称，展示给用户的可读名称
+        description: str,              # 功能描述，解释功能的作用和用途
+        system_prompt: str,            # 系统提示词，指导AI如何执行该功能的指令
+        input_schema: Dict[str, Any],  # 输入数据的JSON Schema定义，用于验证输入参数
+        model_params: Optional[Dict[str, Any]] = None,  # 模型参数配置，如temperature、max_tokens等
+        max_input_length: Optional[int] = None,         # 最大输入长度限制（字符数）
+        estimated_time: Optional[float] = None,         # 预估执行时间（秒）
+        supports_stream: bool = True,                   # 是否支持流式响应
+        is_active: bool = True                          # 功能是否处于激活状态
     ):
-        self.function_id = function_id
-        self.name = name
-        self.description = description
-        self.system_prompt = system_prompt
-        self.input_schema = input_schema
-        self.model_params = model_params or {}
-        self.max_input_length = max_input_length
-        self.estimated_time = estimated_time
-        self.supports_stream = supports_stream
-        self.is_active = is_active
+        self.function_id = function_id                  
+        self.name = name                                
+        self.description = description                  
+        self.system_prompt = system_prompt              
+        self.input_schema = input_schema                
+        self.model_params = model_params or {}          
+        self.max_input_length = max_input_length        
+        self.estimated_time = estimated_time            
+        self.supports_stream = supports_stream          
+        self.is_active = is_active                      
 
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典格式"""
@@ -111,6 +111,9 @@ class FunctionManager:
         self._functions: Dict[str, FunctionConfig] = {}
         self._deepseek_adapter = DeepSeekAdapter()
         self._init_default_functions()
+    def register_function(self, function_config: FunctionConfig) -> None:
+        """注册新的AI功能"""
+        self._functions[function_config.function_id] = function_config
 
     def _init_default_functions(self) -> None:
         """初始化默认的AI功能"""
@@ -196,9 +199,7 @@ class FunctionManager:
             supports_stream=True
         ))
 
-    def register_function(self, function_config: FunctionConfig) -> None:
-        """注册新的AI功能"""
-        self._functions[function_config.function_id] = function_config
+
 
     def get_function(self, function_id: str) -> FunctionConfig:
         """获取功能配置"""
@@ -224,7 +225,6 @@ class FunctionManager:
         function_id: str,
         input_data: Dict[str, Any],
         model_name: Optional[str] = None,
-        use_cache: bool = True
     ) -> Dict[str, Any]:
         """同步执行AI功能"""
         start_time = time.time()
@@ -241,7 +241,6 @@ class FunctionManager:
         # 准备模型参数
         model_params = function.model_params.copy()
         if model_name:
-            # 临时替换模型进行测试
             adapter = DeepSeekAdapter(model=model_name)
         else:
             adapter = self._deepseek_adapter
@@ -265,7 +264,6 @@ class FunctionManager:
             "usage": result["usage"],
             "execution_time": execution_time,
             "model_used": result["model"],
-            "cached": False  # TODO: 实现缓存逻辑
         }
 
         # 保存对话记录
@@ -293,7 +291,6 @@ class FunctionManager:
         function_id: str,
         input_data: Dict[str, Any],
         model_name: Optional[str] = None,
-        use_cache: bool = False
     ) -> Generator[Dict[str, Any], None, None]:
         """流式执行AI功能"""
         start_time = time.time()
