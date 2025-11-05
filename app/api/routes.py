@@ -48,8 +48,7 @@ async def health_check(
     deepseek_status = function_manager.validate_connection()
     services = {
         "deepseek_api": deepseek_status["status"],
-        "database": "healthy",  # TODO: 实现数据库健康检查
-        "cache": "enabled" if settings.enable_cache else "disabled"
+        "database": "healthy"  # TODO: 实现数据库健康检查
     }
 
     overall_status = "healthy" if all(
@@ -136,7 +135,6 @@ async def stream_execute_function(
             client_info={
                 "function_id": request.function_id,
                 "stream_mode": request.stream_mode,
-                "use_cache": request.use_cache,
                 "user_agent": "client"  # 实际应用中可以从请求头获取
             }
         )
@@ -147,8 +145,7 @@ async def stream_execute_function(
                 # 使用功能管理器的流式执行方法
                 for chunk in function_manager.stream_execute_function(
                     function_id=request.function_id,
-                    input_data=request.input,
-                    use_cache=request.use_cache
+                    input_data=request.input
                 ):
                     # 根据流模式过滤或转换数据
                     if request.stream_mode == "tokens":
@@ -220,4 +217,55 @@ async def stream_execute_function(
                 "Access-Control-Allow-Origin": "*",
             }
         )
+
+
+@api_router.get(
+    "/stream/status",
+    summary="获取流状态",
+    description="获取当前活跃流的统计信息和管理状态"
+)
+async def get_stream_status() -> Dict[str, Any]:
+    """获取流状态端点"""
+    try:
+        # 清理过期流
+        streaming_manager.cleanup_expired_streams()
+
+        # 获取活跃流数量
+        active_streams_count = streaming_manager.get_active_streams_count()
+        max_concurrent_streams = streaming_manager.max_concurrent_streams
+
+        return {
+            "status": "active",
+            "active_streams": active_streams_count,
+            "max_concurrent_streams": max_concurrent_streams,
+            "available_slots": max_concurrent_streams - active_streams_count,
+            "server_load": "light" if active_streams_count < max_concurrent_streams * 0.5 else "medium" if active_streams_count < max_concurrent_streams * 0.8 else "heavy",
+            "timestamp": int(time.time())
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"获取流状态失败: {str(e)}"
+        )
+
+
+@api_router.get(
+    "/stream/heartbeat",
+    summary="心跳流",
+    description="返回一个持续的心跳流，用于保持连接活跃",
+    response_class=StreamingResponse
+)
+async def heartbeat_stream() -> StreamingResponse:
+    """心跳流端点"""
+    # 使用流管理器创建心跳流
+    return StreamingResponse(
+        streaming_manager.create_heartbeat_stream(interval=30),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Access-Control-Allow-Origin": "*",
+            "X-Accel-Buffering": "no"  # 禁用nginx缓冲
+        }
+    )
 

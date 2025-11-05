@@ -44,7 +44,7 @@ class ConversationCRUD:
             total_tokens=total_tokens,
             execution_time=execution_time,
             status=status,
-            metadata=json.dumps(metadata) if metadata else None
+            extra_data=json.dumps(metadata) if metadata else None
         )
 
         self.db.add(conversation)
@@ -101,7 +101,7 @@ class ConversationCRUD:
         if conversation:
             conversation.status = status
             if metadata:
-                conversation.metadata = json.dumps(metadata)
+                conversation.extra_data = json.dumps(metadata)
             self.db.commit()
             self.db.refresh(conversation)
         return conversation

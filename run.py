@@ -22,7 +22,6 @@ def main():
     print(f"API文档: http://{settings.host}:{settings.port}/docs")
     print(f"数据库: {settings.database_url}")
     print(f"DeepSeek模型: {settings.deepseek_model}")
-    print(f"缓存: {'启用' if settings.enable_cache else '禁用'}")
     print("-" * 50)
 
     try:

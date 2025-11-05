@@ -7,8 +7,8 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Column, DateTime, Decimal, Integer, String, Text
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import Column, DateTime, Integer, String, Text, Numeric
+from sqlalchemy.orm import declarative_base
 from sqlalchemy.sql import func
 
 Base = declarative_base()
@@ -37,7 +37,7 @@ class Conversation(Base):
 
     # 统计信息字段
     total_tokens = Column(Integer, default=0, comment="整个对话消耗的总Token数量")
-    execution_time = Column(Decimal(10, 3), default=0.000, comment="对话执行时间（秒）")
+    execution_time = Column(Numeric(10, 3), default=0.000, comment="对话执行时间（秒）")
 
     # 状态字段
     status = Column(String(20), nullable=False, default="completed", comment="对话状态（completed/failed/timeout）")
@@ -46,7 +46,7 @@ class Conversation(Base):
     created_at = Column(DateTime, default=func.now(), comment="对话完成时间戳")
 
     # 扩展字段
-    metadata = Column(Text, comment="JSON格式的额外元数据（如参数配置、错误信息等）")
+    extra_data = Column(Text, comment="JSON格式的额外元数据（如参数配置、错误信息等）")
 
     def __repr__(self) -> str:
         """模型的字符串表示"""
@@ -71,5 +71,5 @@ class Conversation(Base):
             "execution_time": float(self.execution_time),
             "status": self.status,
             "created_at": self.created_at.isoformat() if self.created_at else None,
-            "metadata": self.metadata
+            "metadata": self.extra_data
         }

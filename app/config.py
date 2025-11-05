@@ -43,10 +43,6 @@ class Settings(BaseSettings):
     api_prefix: str = "/api"
     cors_origins: list[str] = ["*"]
 
-    # 缓存配置
-    cache_ttl: int = 3600  # 缓存过期时间（秒）
-    enable_cache: bool = True
-
     # 流式响应配置
     stream_timeout: int = 300  # 流式响应超时时间（秒）
     max_concurrent_streams: int = 100  # 最大并发流数量

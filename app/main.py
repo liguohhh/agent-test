@@ -32,25 +32,25 @@ async def lifespan(app: FastAPI):
     # 启动时执行
     logger.info("正在启动AI应用后端接口...")
 
-    # 初始化数据库
-    try:
-        init_database()
-        logger.info("数据库初始化完成")
-    except Exception as e:
-        logger.error(f"数据库初始化失败: {e}")
-        raise
+    # # 初始化数据库
+    # try:
+    #     init_database()
+    #     logger.info("数据库初始化完成")
+    # except Exception as e:
+    #     logger.error(f"数据库初始化失败: {e}")
+    #     raise
 
     # 验证DeepSeek API连接
-    try:
-        from app.services import FunctionManager
-        function_manager = FunctionManager()
-        connection_result = function_manager.validate_connection()
-        if connection_result["status"] == "success":
-            logger.info("DeepSeek API连接验证成功")
-        else:
-            logger.warning(f"DeepSeek API连接验证失败: {connection_result.get('error')}")
-    except Exception as e:
-        logger.warning(f"DeepSeek API连接验证异常: {e}")
+    # try:
+    #     from app.services import FunctionManager
+    #     function_manager = FunctionManager()
+    #     connection_result = function_manager.validate_connection()
+    #     if connection_result["status"] == "success":
+    #         logger.info("DeepSeek API连接验证成功")
+    #     else:
+    #         logger.warning(f"DeepSeek API连接验证失败: {connection_result.get('error')}")
+    # except Exception as e:
+    #     logger.warning(f"DeepSeek API连接验证异常: {e}")
 
     logger.info("应用启动完成")
 
@@ -169,8 +169,6 @@ if settings.debug:
             "database_url": settings.database_url,
             "deepseek_base_url": settings.deepseek_base_url,
             "deepseek_model": settings.deepseek_model,
-            "enable_cache": settings.enable_cache,
-            "cache_ttl": settings.cache_ttl,
             "log_level": settings.log_level
         }
 

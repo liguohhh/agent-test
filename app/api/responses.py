@@ -72,7 +72,6 @@ class StreamRequest(BaseModel):
     function_id: str
     input: Dict[str, Any]
     stream_mode: str = "tokens"  # tokens/chunks/sentences
-    use_cache: bool = False
 
 
 class HealthResponse(BaseModel):
