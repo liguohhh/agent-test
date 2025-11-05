@@ -4,7 +4,6 @@ API路由定义
 实现所有API端点
 """
 
-from typing import Dict, Any
 import time
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -15,13 +14,11 @@ from app.api.responses import (
     ExecuteRequest,
     ExecuteResponse,
     FunctionListResponse,
-    HealthResponse,
     StreamRequest
 )
 from app.services import FunctionManager
 from app.utils.streaming import StreamingResponseManager, streaming_manager
 from app.core.exceptions import APIError, ValidationError, FunctionNotFoundError
-from app.config import settings
 
 # 创建路由器
 api_router = APIRouter()
@@ -32,36 +29,6 @@ def get_function_manager() -> FunctionManager:
     return FunctionManager()
 
 
-@api_router.get(
-    "/health",
-    response_model=HealthResponse,
-    summary="健康检查",
-    description="检查应用和外部服务的健康状态"
-)
-async def health_check(
-    function_manager: FunctionManager = Depends(get_function_manager)
-) -> HealthResponse:
-    """健康检查端点"""
-    import time
-
-    # 检查DeepSeek API连接
-    deepseek_status = function_manager.validate_connection()
-    services = {
-        "deepseek_api": deepseek_status["status"],
-        "database": "healthy"  # TODO: 实现数据库健康检查
-    }
-
-    overall_status = "healthy" if all(
-        status == "healthy" or status == "enabled" or status == "success"
-        for status in services.values()
-    ) else "unhealthy"
-
-    return HealthResponse(
-        status=overall_status,
-        version=settings.app_version,
-        timestamp=int(time.time()),
-        services=services
-    )
 
 
 @api_router.get(
@@ -219,53 +186,4 @@ async def stream_execute_function(
         )
 
 
-@api_router.get(
-    "/stream/status",
-    summary="获取流状态",
-    description="获取当前活跃流的统计信息和管理状态"
-)
-async def get_stream_status() -> Dict[str, Any]:
-    """获取流状态端点"""
-    try:
-        # 清理过期流
-        streaming_manager.cleanup_expired_streams()
-
-        # 获取活跃流数量
-        active_streams_count = streaming_manager.get_active_streams_count()
-        max_concurrent_streams = streaming_manager.max_concurrent_streams
-
-        return {
-            "status": "active",
-            "active_streams": active_streams_count,
-            "max_concurrent_streams": max_concurrent_streams,
-            "available_slots": max_concurrent_streams - active_streams_count,
-            "server_load": "light" if active_streams_count < max_concurrent_streams * 0.5 else "medium" if active_streams_count < max_concurrent_streams * 0.8 else "heavy",
-            "timestamp": int(time.time())
-        }
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"获取流状态失败: {str(e)}"
-        )
-
-
-@api_router.get(
-    "/stream/heartbeat",
-    summary="心跳流",
-    description="返回一个持续的心跳流，用于保持连接活跃",
-    response_class=StreamingResponse
-)
-async def heartbeat_stream() -> StreamingResponse:
-    """心跳流端点"""
-    # 使用流管理器创建心跳流
-    return StreamingResponse(
-        streaming_manager.create_heartbeat_stream(interval=30),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "Access-Control-Allow-Origin": "*",
-            "X-Accel-Buffering": "no"  # 禁用nginx缓冲
-        }
-    )
 

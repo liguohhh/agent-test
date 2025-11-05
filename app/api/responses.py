@@ -74,9 +74,3 @@ class StreamRequest(BaseModel):
     stream_mode: str = "tokens"  # tokens/chunks/sentences
 
 
-class HealthResponse(BaseModel):
-    """健康检查响应模型"""
-    status: str
-    version: str
-    timestamp: int
-    services: Dict[str, str]

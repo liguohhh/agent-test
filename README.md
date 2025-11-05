@@ -105,371 +105,220 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 ## 📚 API接口文档
 
-### 1. 流式AI接口
+### 基础信息
 
-#### 1.1 创建流式会话
+- **基础路径**: 所有API接口的基础路径为 `/api`
+- **响应格式**: JSON
+- **错误处理**: 统一错误响应格式
 
-**接口地址**：`POST /api/stream`
-
-**请求体**：
-```json
-{
-    "prompt": "用户输入的文本内容",
-    "function_id": "zh-en_translation"
-}
-```
-
-**支持的功能ID**：
-- `zh-en_translation`: 中文到英文翻译
-- `en-zh_translation`: 英文到中文翻译
-- `text_summarization`: 文本摘要
-
-**响应**：Server-Sent Events (SSE) 流式数据
-
-**响应格式**：
-```
-data: {"type": "start", "stream_id": "uuid", "timestamp": "2025-01-01T00:00:00Z"}
-
-data: {"type": "token", "content": "第", "stream_id": "uuid", "timestamp": "2025-01-01T00:00:00Z"}
-
-data: {"type": "token", "content": "一", "stream_id": "uuid", "timestamp": "2025-01-01T00:00:00Z"}
-
-data: {"type": "end", "stream_id": "uuid", "final_result": "完整结果", "timestamp": "2025-01-01T00:00:00Z"}
-```
-
-**错误事件**：
-```
-data: {"type": "error", "error": "错误信息", "stream_id": "uuid", "timestamp": "2025-01-01T00:00:00Z"}
-```
-
-#### 1.2 查询流状态
-
-**接口地址**：`GET /api/stream/status`
-
-**响应**：
-```json
-{
-    "active_streams": 2,
-    "max_concurrent_streams": 100
-}
-```
-
-#### 1.3 流心跳检测
-
-**接口地址**：`GET /api/stream/heartbeat`
-
-**响应**：
-```json
-{
-    "status": "alive",
-    "timestamp": "2025-01-01T00:00:00Z"
-}
-```
-
-### 2. 传统API接口
-
-#### 2.1 获取可用AI功能
+### 1. 获取功能列表
 
 **接口地址**：`GET /api/functions`
 
+**描述**：获取系统中所有可用的AI功能列表
+
 **响应**：
 ```json
 {
-    "functions": [
-        {
-            "id": "zh-en_translation",
-            "name": "中英翻译",
-            "description": "将中文文本翻译为英文",
-            "examples": ["你好世界", "今天天气很好"]
+  "code": 200,
+  "message": "success",
+  "data": [
+    {
+      "id": "translation_zh_to_en",
+      "name": "中译英",
+      "description": "将中文文本翻译成英文",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "需要翻译的中文文本"
+          }
         },
-        {
-            "id": "en-zh_translation",
-            "name": "英中翻译",
-            "description": "将英文文本翻译为中文",
-            "examples": ["Hello World", "The weather is nice today"]
+        "required": [
+          "text"
+        ]
+      },
+      "max_input_length": 5000,
+      "estimated_time": 5,
+      "supports_stream": true,
+      "model_used": null
+    },
+    {
+      "id": "translation_en_to_zh",
+      "name": "英译中",
+      "description": "将英文文本翻译成中文",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "需要翻译的英文文本"
+          }
         },
-        {
-            "id": "text_summarization",
-            "name": "文本摘要",
-            "description": "对长文本进行智能摘要",
-            "examples": ["这是一段需要摘要的文本..."]
-        }
-    ]
+        "required": [
+          "text"
+        ]
+      },
+      "max_input_length": 5000,
+      "estimated_time": 5,
+      "supports_stream": true,
+      "model_used": null
+    },
+    {
+      "id": "text_summary",
+      "name": "文本总结",
+      "description": "对长文本进行智能总结，提取关键信息",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "需要总结的文本内容"
+          },
+          "summary_length": {
+            "type": "string",
+            "enum": [
+              "short",
+              "medium",
+              "long"
+            ],
+            "description": "总结长度：short（简短）、medium（中等）、long（详细）",
+            "default": "medium"
+          }
+        },
+        "required": [
+          "text"
+        ]
+      },
+      "max_input_length": 10000,
+      "estimated_time": 8,
+      "supports_stream": true,
+      "model_used": null
+    }
+  ]
 }
 ```
 
-#### 2.2 执行AI功能
+### 2. 同步执行功能
 
 **接口地址**：`POST /api/execute`
+
+**描述**：同步执行指定的AI功能，直接返回完整结果
 
 **请求体**：
 ```json
 {
     "function_id": "zh-en_translation",
-    "prompt": "你好世界"
+    "input": {
+        "text": "你好世界"
+    },
+    "use_cache": true,
+    "model_name": "deepseek-chat"
 }
 ```
 
 **响应**：
 ```json
 {
-    "success": true,
-    "conversation_id": "uuid",
     "function_id": "zh-en_translation",
-    "response": "Hello World",
+    "result": {
+        "content": "Hello World"
+    },
+    "usage": {
+        "input_tokens": 10,
+        "output_tokens": 5,
+        "total_tokens": 15
+    },
     "execution_time": 1.234,
-    "tokens_used": 25,
-    "error": null
-}
-```
-
-#### 2.3 获取历史记录
-
-**接口地址**：`GET /api/history`
-
-**响应**：
-```json
-{
-    "conversations": [
-        {
-            "id": 1,
-            "conversation_id": "uuid",
-            "function_id": "zh-en_translation",
-            "function_name": "中英翻译",
-            "model_used": "deepseek-chat",
-            "user_input": "你好世界",
-            "ai_response": "Hello World",
-            "total_tokens": 25,
-            "execution_time": 1.234,
-            "status": "completed",
-            "created_at": "2025-01-01T00:00:00Z"
-        }
-    ]
-}
-```
-
-#### 2.4 获取会话详情
-
-**接口地址**：`GET /api/history/{conversation_id}`
-
-**响应**：
-```json
-{
-    "id": 1,
-    "conversation_id": "uuid",
-    "function_id": "zh-en_translation",
-    "function_name": "中英翻译",
     "model_used": "deepseek-chat",
-    "user_input": "你好世界",
-    "ai_response": "Hello World",
-    "total_tokens": 25,
-    "execution_time": 1.234,
-    "status": "completed",
-    "created_at": "2025-01-01T00:00:00Z"
+    "cached": false
 }
 ```
 
-### 3. 系统接口
-
-#### 3.1 健康检查
-
-**接口地址**：`GET /health`
-
-**响应**：
+**错误响应**：
 ```json
 {
-    "status": "healthy",
-    "timestamp": "2025-01-01T00:00:00Z",
-    "version": "1.0.0"
+    "code": 404,
+    "message": "功能不存在",
+    "error_code": "FUNCTION_NOT_FOUND",
+    "details": {
+        "function_id": "invalid_function"
+    }
+}
+```
+
+### 3. 流式执行功能
+
+**接口地址**：`POST /api/stream`
+
+**描述**：流式执行指定的AI功能，通过Server-Sent Events实时返回生成结果
+
+**请求体**：
+```json
+{
+    "function_id": "zh-en_translation",
+    "input": {
+        "text": "你好世界，这是一个流式翻译测试"
+    },
+    "stream_mode": "tokens"
 }
 ```
 
-## 💡 使用示例
+**流式响应**：Server-Sent Events (SSE) 格式
 
-### Python客户端示例
+**响应事件类型**：
 
-#### 流式翻译示例
-
-```python
-import requests
-import json
-
-def stream_translation():
-    """流式翻译示例"""
-    url = "http://localhost:8000/api/stream"
-    data = {
-        "prompt": "你好世界，这是一个流式翻译的测试。",
-        "function_id": "zh-en_translation"
-    }
-
-    print("开始流式翻译...")
-    response = requests.post(url, json=data, stream=True)
-
-    for line in response.iter_lines():
-        if line:
-            line = line.decode('utf-8')
-            if line.startswith('data: '):
-                data_str = line[6:]  # 移除 'data: ' 前缀
-                try:
-                    event_data = json.loads(data_str)
-                    event_type = event_data.get('type')
-
-                    if event_type == 'start':
-                        print(f"[开始] 流ID: {event_data.get('stream_id')}")
-                    elif event_type == 'token':
-                        content = event_data.get('content', '')
-                        print(content, end='', flush=True)
-                    elif event_type == 'end':
-                        print(f"\n[完成] 结果: {event_data.get('final_result')}")
-                        break
-                    elif event_type == 'error':
-                        print(f"\n[错误] {event_data.get('error')}")
-                        break
-                except json.JSONDecodeError:
-                    continue
-
-if __name__ == "__main__":
-    stream_translation()
+1. **开始事件**：
+```
+data: {"type": "start", "stream_id": "uuid", "timestamp": 1699123456}
 ```
 
-#### 传统API调用示例
-
-```python
-import requests
-
-def translate_text():
-    """传统翻译示例"""
-    url = "http://localhost:8000/api/execute"
-    data = {
-        "function_id": "zh-en_translation",
-        "prompt": "你好世界"
-    }
-
-    response = requests.post(url, json=data)
-    result = response.json()
-
-    if result['success']:
-        print(f"翻译结果: {result['response']}")
-        print(f"执行时间: {result['execution_time']}秒")
-        print(f"使用Token: {result['tokens_used']}")
-    else:
-        print(f"执行失败: {result['error']}")
-
-def get_history():
-    """获取历史记录"""
-    url = "http://localhost:8000/api/history"
-    response = requests.get(url)
-    result = response.json()
-
-    print("历史记录:")
-    for conv in result['conversations']:
-        print(f"- {conv['function_name']}: {conv['user_input']} -> {conv['ai_response']}")
-
-if __name__ == "__main__":
-    translate_text()
-    get_history()
+2. **Token事件**：
+```
+data: {"type": "token", "content": "Hello", "timestamp": 1699123457}
+data: {"type": "token", "content": " ", "timestamp": 1699123458}
+data: {"type": "token", "content": "World", "timestamp": 1699123459}
 ```
 
-### JavaScript客户端示例
+3. **结束事件**：
+```
+data: {"type": "end", "result": "完整结果", "usage": {"total_tokens": 20}, "timestamp": 1699123460}
+```
 
-```javascript
-// 流式翻译示例
-async function streamTranslation() {
-    const response = await fetch('http://localhost:8000/api/stream', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            prompt: '你好世界，这是一个流式翻译测试。',
-            function_id: 'zh-en_translation'
-        })
-    });
+4. **错误事件**：
+```
+data: {"type": "error", "message": "错误信息", "timestamp": 1699123461}
+```
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let result = '';
+**流模式选项**：
+- `tokens`: 逐token返回，实时性最高
+- `chunks`: 累积块返回，减少传输频率
+- `sentences`: 句子级返回，适合文本生成
 
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+### 错误处理
 
-        const chunk = decoder.decode(value);
-        const lines = chunk.split('\n');
+所有API错误都遵循统一响应格式：
 
-        for (const line of lines) {
-            if (line.startsWith('data: ')) {
-                try {
-                    const data = JSON.parse(line.substring(6));
-                    if (data.type === 'token') {
-                        result += data.content;
-                        console.log('当前结果:', result);
-                    } else if (data.type === 'end') {
-                        console.log('最终结果:', data.final_result);
-                        return;
-                    }
-                } catch (e) {
-                    // 忽略解析错误
-                }
-            }
-        }
-    }
+```json
+{
+    "code": "错误码",
+    "message": "错误描述",
+    "error_code": "内部错误码",
+    "details": {}
 }
-
-// 调用流式翻译
-streamTranslation();
 ```
+
+**常见错误码**：
+- `400`: 请求参数错误
+- `404`: 功能不存在
+- `500`: 服务器内部错误
+
+
+
 
 ## 🔧 技术栈
 
 - **后端框架**: FastAPI
 - **AI服务**: DeepSeek API
-- **数据库**: SQLite (SQLAlchemy ORM)
-- **流式技术**: Server-Sent Events (SSE)
-- **异步处理**: asyncio
-- **配置管理**: pydantic-settings
-- **日志系统**: loguru
-- **API文档**: OpenAPI/Swagger
-
-## 🚦 错误处理
-
-系统提供完整的错误处理机制：
-
-- **HTTP状态码**: 标准的HTTP状态码
-- **错误信息**: 详细的错误描述和堆栈信息
-- **流式错误**: 通过SSE事件推送错误信息
-- **超时处理**: 流式连接超时自动断开
-- **资源保护**: 最大并发流数量限制
-
-## 📊 监控和日志
-
-- **健康检查**: `/health` 端点监控服务状态
-- **流状态**: `/api/stream/status` 监控活跃流数量
-- **心跳检测**: `/api/stream/heartbeat` 检测流服务状态
-- **结构化日志**: JSON格式的日志输出
-- **性能指标**: 执行时间、Token使用量等
-
-## 🤝 贡献指南
-
-1. Fork 项目
-2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 开启 Pull Request
-
-## 📄 许可证
-
-本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情。
-
-## 🆘 支持
-
-如果您在使用过程中遇到问题，请：
-
-1. 查看 [API文档](http://0.0.0.0:8000/docs)
-2. 检查环境配置是否正确
-3. 查看日志输出获取错误信息
-4. 提交 Issue 获取帮助
-
----
-
-**注意**: 请确保正确配置DeepSeek API密钥，否则AI功能将无法正常工作。
+- **数据库**: SQLite
